@@ -96,7 +96,7 @@ pkp_total_friend_count = (
     pkp_dropped["smaller_id"].value_counts() + blank_series
 ).fillna(0) + (pkp_dropped["larger_id"].value_counts() + blank_series).fillna(0)
 
-pkp_total_friend_count.nlargest(10)
+print(pkp_total_friend_count.nlargest(10, keep="all"))
 # %% [markdown]
 # # Question - 2. Who wrote the most liked post?  (4 points)
 # Count up the number of likes for each post and find out who wrote that post.
@@ -111,6 +111,7 @@ merged_likes_and_people = post_hasCreator_person.merge(
     post_and_likes, left_on="Post.id", right_index=True
 )["Person.id"]
 people_with_most_likes = merged_likes_and_people.unique()
+
 print(people_with_most_likes)
 # %% [markdown]
 # # Question - 3. Who wrote the most influential post? The most influential post is the most discussed and most liked post. (4 points)
@@ -121,7 +122,28 @@ print(people_with_most_likes)
 #
 
 # %%
-# Code here
+post_and_likes = pd.DataFrame(
+    person_likes_post.groupby(["Post.id"])["Post.id"].count()
+).rename(columns={"Post.id": "likes"})
+
+post_and_comments = pd.DataFrame(
+    comment_replyOf_post.groupby(["Post.id"])["Post.id"].count()
+).rename(columns={"Post.id": "comments"})
+
+post_likes_comments = post_and_likes.merge(
+    post_and_comments, left_index=True, right_index=True
+)
+post_likes_comments["total"] = (
+    post_likes_comments["likes"] + post_likes_comments["comments"]
+)
+
+post_most_engagement = post_likes_comments.nlargest(1, "total")
+
+print(
+    post_most_engagement.merge(
+        post_hasCreator_person, left_index=True, right_on="Post.id"
+    )[["Person.id"]]
+)
 
 # %% [markdown]
 # # Question - 4. Create two histograms for the distributions of the number of likes and comments that users have created. (4 points)
@@ -130,8 +152,18 @@ print(people_with_most_likes)
 # **Tip:** First perpare two lists of number of likes and number of comments that users have done. You need to count up how many likes and how many comments each unique user id has.
 
 # %%
-# Code here
+# the distribution of both histrograms are strongly right skewed
+comments_user_count = pd.DataFrame(
+    (comment_hasCreator_person.groupby("Person.id")["Person.id"].count())
+).rename(columns={"Person.id": "comments_created"})
 
+comments_user_count.hist()
+
+likes_user_count = pd.DataFrame(
+    (person_likes_post.groupby("Person.id")["Person.id"].count())
+).rename(columns={"Person.id": "likes_created"})
+
+likes_user_count.hist()
 # %% [markdown]
 # # Question - 5. What is the Pearson correlation coefficient between the number of comments and the number of likes that users do on the social network? (4 points)
 #
@@ -165,4 +197,50 @@ print(people_with_most_likes)
 #
 
 # %%
-# Code here
+blank_series = pd.Series(index=np.arange(0, 1000), data=np.zeros(1000))
+
+comments_user_count = (comments_user_count["comments_created"] + blank_series).fillna(0)
+likes_user_count = (likes_user_count["likes_created"] + blank_series).fillna(0)
+
+comments_likes_dict = {
+    "comments_created": comments_user_count,
+    "likes_created": likes_user_count,
+}
+comments_likes_df = pd.DataFrame(comments_likes_dict)
+
+
+# %%
+
+# x: likes per user
+# y: comments per user
+# n: number of users
+
+correlation_df = comments_likes_df.copy()
+
+n = len(comments_likes_df)
+correlation_df = correlation_df.rename(
+    columns={"comments_created": "x", "likes_created": "y"}
+)
+
+correlation_df["xy"] = correlation_df["x"] * correlation_df["y"]
+
+sum_xy = correlation_df["xy"].sum()
+
+sum_x = correlation_df["x"].sum()
+sum_y = correlation_df["y"].sum()
+
+sum_x_squared = (correlation_df["x"] ** 2).sum()
+sum_x_whole_squared = sum_x**2
+
+sum_y_squared = (correlation_df["y"] ** 2).sum()
+sum_y_whole_squared = sum_y**2
+
+numerator = (n * sum_xy) - (sum_x * sum_y)
+denominator = np.sqrt(
+    ((n * sum_x_squared) - sum_x_whole_squared)
+    * ((n * sum_y_squared) - sum_y_whole_squared)
+)
+
+corr = numerator / denominator
+print(corr)
+# 0.9257650670138979
